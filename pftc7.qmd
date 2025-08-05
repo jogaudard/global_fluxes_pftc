@@ -1,0 +1,53 @@
+---
+title: "Reprocessing PFTC7 fluxes"
+format: gfm
+author: Joseph Gaudard
+date: today
+bibliography: /home/jga051/Dropbox/PhD/biblio_phd_zot.bib
+csl: /home/jga051/Documents/01_PhD/apa-old-doi-prefix.csl
+---
+
+```{r}
+#| include: FALSE
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+options(tidyverse.quiet = TRUE)
+```
+
+# Importing and reading the files
+
+```{r}
+#| label: osf-import
+#| message: FALSE
+library(dataDownloader)
+
+sites <- c(1:5)
+
+files <- paste0("LI7500_Site ", sites, ".zip")
+
+lapply(files,
+       get_file,
+       node = "hk2cy",
+       remote_path = "raw_data/x_raw_ecosystem_fluxes/LI7500",
+       path = "pftc7_raw_data")
+
+files_zip <- paste0("pftc7_raw_data/", files)
+
+lapply(files_zip,
+       unzip,
+       exdir = "pftc7_raw_data/LI7500")
+```
+
+
+
+
+```{r}
+#| label: cleaning
+#| include: FALSE
+library(here)
+unlink(here("pftc7_raw_data"),
+       recursive = TRUE)
+```
+
