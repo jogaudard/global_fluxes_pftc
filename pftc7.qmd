@@ -169,6 +169,50 @@ pftc7_fluxes_exp_co2 <- flux_calc(pftc7_flags_exp_co2,
 
 ```
 
+### Linear model
+
+```{r}
+#| label: fitting_lin_co2
+#| message: FALSE
+#| warning: FALSE
+pftc7_fits_lin_co2 <- flux_fitting(pftc7_data,
+                                   f_conc = `CO2 (umol/mol)_dry`,
+                                   fit_type = "linear",
+                                   start_cut = 0,
+                                   end_cut = 0)
+```
+
+Using `fluxible::flux_quality` to assess the quality of the dataset.
+```{r}
+#| label: flags_lin_co2
+pftc7_flags_lin_co2 <- flux_quality(pftc7_fits_lin_co2,
+                                    f_conc = `CO2 (umol/mol)_dry`,
+                                    rsquared_threshold = 0.5)
+```
+
+
+
+Now let's calculate the fluxes with `fluxible::flux_calc`.
+```{r}
+#| label: calc_lin_co2
+
+pftc7_fluxes_lin_co2 <- flux_calc(pftc7_flags_lin_co2,
+                                  slope_col = f_slope_corr,
+                                  temp_air_col = `Temperature (C)`,
+                                  setup_volume = 2197,
+                                  atm_pressure = pressure_atm,
+                                  plot_area = 1.44,
+                                  conc_unit = "ppm",
+                                  flux_unit = "umol/m2/s",
+                                  cols_keep = c(
+                                    "Date", "Time", "f_quality_flag",
+                                    "site_id", "elevation_m_asl", "aspect",
+                                    "plot_id", "day_night", "flux_type",
+                                    "replicate"
+                                  ))
+
+```
+
 ## H~2~O
 
 Wet air correction:
@@ -238,6 +282,53 @@ pftc7_fluxes_exp_h2o <- flux_calc(pftc7_flags_exp_h2o,
 
 ```
 
+### Linear model
+
+```{r}
+#| label: fitting_lin_h2o
+#| message: FALSE
+#| warning: FALSE
+pftc7_fits_lin_h2o <- flux_fitting(pftc7_data,
+                                   f_conc = `H2O (mmol/mol)`,
+                                   fit_type = "linear",
+                                   start_cut = 0,
+                                   end_cut = 0)
+```
+
+Using `fluxible::flux_quality` to assess the quality of the dataset.
+```{r}
+#| label: flags_lin_h2o
+pftc7_flags_lin_h2o <- flux_quality(pftc7_fits_lin_h2o,
+                                    f_conc = `H2O (mmol/mol)`,
+                                    rsquared_threshold = 0.5,
+                                    ambient_conc = 20,
+                                    error = 10)
+```
+
+
+
+
+Now let's calculate the fluxes with `fluxible::flux_calc`.
+```{r}
+#| label: calc_lin_h2o
+
+pftc7_fluxes_lin_h2o <- flux_calc(pftc7_flags_lin_h2o,
+                                  slope_col = f_slope_corr,
+                                  temp_air_col = `Temperature (C)`,
+                                  setup_volume = 2197,
+                                  atm_pressure = pressure_atm,
+                                  plot_area = 1.44,
+                                  conc_unit = "mmol/mol",
+                                  flux_unit = "mmol/m2/s",
+                                  cols_keep = c(
+                                    "Date", "Time", "f_quality_flag",
+                                    "site_id", "elevation_m_asl", "aspect",
+                                    "plot_id", "day_night", "flux_type",
+                                    "replicate"
+                                  ))
+
+```
+
 # Comparison
 
 
@@ -246,6 +337,7 @@ Adjusting to PFTC7 naming convention
 #| label: fluxible-format_co2
 
 pftc7_fluxible_fluxes_co2 <- pftc7_fluxes_exp_co2 |>
+  bind_rows(pftc7_fluxes_lin_co2) |>
   mutate(
     flux_category = "Carbon",
     flux_type = case_when(
@@ -257,6 +349,7 @@ pftc7_fluxible_fluxes_co2 <- pftc7_fluxes_exp_co2 |>
   )
 
 pftc7_fluxible_fluxes_h2o <- pftc7_fluxes_exp_h2o |>
+  bind_rows(pftc7_fluxes_lin_h2o) |>
   mutate(
     flux_category = "Water",
     flux_type = case_when(
@@ -270,7 +363,7 @@ pftc7_fluxible_fluxes_h2o <- pftc7_fluxes_exp_h2o |>
 # keeping the redo when there is a redo
 pftc7_fluxible_fluxes <- bind_rows(pftc7_fluxible_fluxes_co2, pftc7_fluxible_fluxes_h2o) |>
   arrange(desc(replicate)) |>
-  distinct(site_id, elevation_m_asl, aspect, plot_id, day_night, flux_type, flux_category, .keep_all = TRUE)
+  distinct(site_id, elevation_m_asl, aspect, plot_id, day_night, flux_type, flux_category, f_model, .keep_all = TRUE)
 ```
 
 Downloading and adjusting published data
@@ -308,7 +401,7 @@ pfct7_comparison <- pftc7_published_fluxes |>
 #| fig-height: 8 
 
 pfct7_comparison |>
-  ggplot(aes(f_flux, flux_value)) +
+  ggplot(aes(f_flux, flux_value, color = f_model)) +
   theme_bw() +
   geom_point() +
   geom_abline(slope = 1, intercept = 0) +
@@ -318,8 +411,9 @@ pfct7_comparison |>
   facet_wrap(. ~ flux_type, ncol = 2, scales = "free") +
   labs(
     title = "Reprocessing of PFTC7 flux data",
-    x = "Fluxes calculated with Fluxible (exp_zhao18 model)",
-    y = "Fluxes as published in the data paper"
+    x = "Fluxes calculated with Fluxible (exp_zhao18 and linear model)",
+    y = "Fluxes as published in the data paper",
+    color = "Fluxible model"
   ) 
 
 ```
