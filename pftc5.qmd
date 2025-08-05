@@ -1,6 +1,6 @@
 ---
 title: "Reprocessing PFTC5 fluxes"
-output: gfm
+format: gfm
 author: Joseph Gaudard
 date: today
 bibliography: /home/jga051/Dropbox/PhD/biblio_phd_zot.bib
@@ -31,10 +31,10 @@ library(dataDownloader)
 get_file("gs8u6",
          "rawData/raw_c-flux",
          "rawC-flux.zip",
-         "pftc5")
+         "pftc5_raw_data")
 
-unzip("pftc5/rawC-flux.zip",
-      exdir = "pftc5/rawC-flux")
+unzip("pftc5_raw_data/rawC-flux.zip",
+      exdir = "pftc5_raw_data/rawC-flux")
 ```
 
 Then we import the data with `licoread::import7500`.
@@ -44,7 +44,7 @@ Then we import the data with `licoread::import7500`.
 library(licoread)
 library(tidyverse)
 pftc5_data_raw <- import7500(
-  "pftc5/rawC-flux/rawData/raw_tent-flux",
+  "pftc5_raw_data/rawC-flux/rawData/raw_tent-flux",
   plotinfo = c("site", "treatment", "date", "plot_id", "trial")
 )
 
@@ -65,10 +65,10 @@ Note that this is also an example of how fluxible can be used to process data in
 get_file("gs8u6",
          "c-flux",
          "PFTC3_Puna_PFTC5_Peru_2018_2020_Cflux.csv",
-         "pftc5")
+         "pftc5_raw_data")
 
 pftc5_published_fluxes_co2 <- read_csv(
-  "pftc5/PFTC3_Puna_PFTC5_Peru_2018_2020_Cflux.csv",
+  "pftc5_raw_data/PFTC3_Puna_PFTC5_Peru_2018_2020_Cflux.csv",
   show_col_types = FALSE # quiet!
 )
 
@@ -263,7 +263,7 @@ pftc5_fluxes_exp_co2 <- flux_calc(pftc5_flags_exp_co2,
                                   flux_unit = "umol/m2/s",
                                   cols_keep = c(
                                     "site", "treatment", "date", "plot_id",
-                                    "flux", "replicate"
+                                    "flux", "replicate", "f_quality_flag"
                                   ))
 ```
 
@@ -354,7 +354,7 @@ pftc5_fluxes_lm_co2 <- flux_calc(pftc5_flags_lm_co2,
                                  flux_unit = "umol/m2/s",
                                  cols_keep = c(
                                    "site", "treatment", "date", "plot_id",
-                                   "flux", "replicate"
+                                   "flux", "replicate", "f_quality_flag"
                                  ))
 ```
 
@@ -478,7 +478,7 @@ pftc5_fluxes_exp_h2o <- flux_calc(pftc5_flags_exp_h2o,
                                   flux_unit = "mmol/m2/s",
                                   cols_keep = c(
                                     "site", "treatment", "date", "plot_id",
-                                    "flux", "replicate"
+                                    "flux", "replicate", "f_quality_flag"
                                   ))
 ```
 
@@ -572,7 +572,7 @@ pftc5_fluxes_lm_h2o <- flux_calc(pftc5_flags_lm_h2o,
                                  flux_unit = "mmol/m2/s",
                                  cols_keep = c(
                                    "site", "treatment", "date", "plot_id",
-                                   "flux", "replicate"
+                                   "flux", "replicate", "f_quality_flag"
                                  ))
 ```
 
@@ -674,10 +674,10 @@ Importing the published dataset:
 get_file("gs8u6",
          "c-flux",
          "PFTC3_Puna_PFTC5_Peru_2018_2020_wflux.csv",
-         "ex_data/li7500")
+         "pftc5_raw_data")
 
 pftc5_published_fluxes_h2o <- read_csv(
-  "ex_data/li7500/PFTC3_Puna_PFTC5_Peru_2018_2020_wflux.csv",
+  "pftc5_raw_data/PFTC3_Puna_PFTC5_Peru_2018_2020_wflux.csv",
   show_col_types = FALSE # quiet!
 )
 
@@ -759,11 +759,23 @@ pftc5_fluxes_comparison_h2o |>
 
 <!-- ## Investigation of differences -->
 
+# Exporting clean data
+We still need to decide which model to use (`linear` or `exp_zhao18`).
+
+```{r}
+#| label: export
+
+pftc5_fluxible_fluxes <- bind_rows(pftc5_fluxible_fluxes_co2, pftc5_fluxible_fluxes_h2o) |>
+  select(!fluxible_flux) # that was for comparison
+
+write_csv(pftc5_fluxible_fluxes, "data/raw_data/fluxible_reprocessed/pftc5_fluxible.csv")
+```
+
 ```{r}
 #| label: cleaning
 #| include: FALSE
 library(here)
-unlink(here("R", "data_cleaning_and_prep", "pftc5"),
+unlink(here("pftc5_raw_data"),
        recursive = TRUE)
 ```
 
