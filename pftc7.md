@@ -1,27 +1,10 @@
----
-title: "Reprocessing PFTC7 fluxes"
-format: gfm
-author: Joseph Gaudard
-date: today
-bibliography: /home/jga051/Dropbox/PhD/biblio_phd_zot.bib
-csl: /home/jga051/Documents/01_PhD/apa-old-doi-prefix.csl
----
-
-```{r}
-#| include: FALSE
-knitr::opts_chunk$set(
-  collapse = TRUE,
-  comment = "#>"
-)
-options(tidyverse.quiet = TRUE)
-```
+# Reprocessing PFTC7 fluxes
+Joseph Gaudard
+2025-08-05
 
 # Importing and reading the files
 
-```{r}
-#| label: osf-import
-#| message: FALSE
-#| output: false
+``` r
 my_packages <- c(
   "dataDownloader",
   "tidyverse",
@@ -63,10 +46,7 @@ files_remove <- files |>
 unlink(here(files_remove), recursive = TRUE)
 ```
 
-```{r}
-#| label: reading
-#| message: FALSE
-
+``` r
 
 pftc7_raw_data <- import7500("pftc7_raw_data/LI7500", version = "post2023")
 
@@ -96,28 +76,24 @@ pftc7_data <- pftc7_raw_data |>
     elevation_m_asl = as.double(elevation_m_asl),
     plot_id = as.double(plot_id)
   )
-
-
 ```
 
 # Processing
 
-## CO~2~
+## CO<sub>2</sub>
 
 Wet air correction:
-```{r}
-#| label: wetair_co2
+
+``` r
 pftc7_data <- flux_drygas(pftc7_data, `CO2 (umol/mol)`, `H2O (mmol/mol)`)
 ```
 
 ### Exponential model
 
-Fitting the model presented in @zhaoCalculationDaytimeCO22018 .
-```{r}
-#| label: fitting_exp_co2
-#| message: FALSE
-#| warning: FALSE
+Fitting the model presented in Zhao, Hammerle, Zeeman, & Wohlfahrt
+(2018) .
 
+``` r
 # just to save time
 
 start_cut_pftc7 <- 20
@@ -132,8 +108,8 @@ pftc7_fits_exp_co2 <- flux_fitting(pftc7_data,
 ```
 
 Using `fluxible::flux_quality` to assess the quality of the dataset.
-```{r}
-#| label: flags_exp_co2
+
+``` r
 pftc7_flags_exp_co2 <- flux_quality(pftc7_fits_exp_co2,
                                     f_conc = `CO2 (umol/mol)_dry`,
                                     force_discard = c(
@@ -155,12 +131,22 @@ pftc7_flags_exp_co2 <- flux_quality(pftc7_fits_exp_co2,
                                     force_ok = c(
                                       "1_2000_east_1_night_resp−2023−12−11T220436.txt" # not sure why it was discarded
                                     ))
+#> 
+#>  Total number of measurements: 258
+#> 
+#>  ok   216     84 %
+#>  zero     28      11 %
+#>  discard      7   3 %
+#>  force_discard    5   2 %
+#>  force_zero   1   0 %
+#>  force_lm     1   0 %
+#>  start_error      0   0 %
+#>  no_data      0   0 %
+#>  force_ok     0   0 %
+#>  no_slope     0   0 %
 ```
 
-```{r}
-#| label: plotting_exp_co2
-#| eval: FALSE
-
+``` r
 pftc7_flags_exp_co2 |>
   flux_plot(f_conc = `CO2 (umol/mol)_dry`,
             print_plot = FALSE,
@@ -169,14 +155,11 @@ pftc7_flags_exp_co2 |>
             f_ylim_lower = 350,
             y_text_position = 430,
             f_plotname = "pftc7_exp_co2")
-
 ```
 
-Now let's calculate the fluxes with `fluxible::flux_calc`.
-```{r}
-#| label: calc_exp_co2
-#| message: FALSE
+Now let’s calculate the fluxes with `fluxible::flux_calc`.
 
+``` r
 pftc7_fluxes_exp_co2 <- flux_calc(pftc7_flags_exp_co2,
                                   slope_col = f_slope_corr,
                                   temp_air_col = `Temperature (C)`,
@@ -191,15 +174,11 @@ pftc7_fluxes_exp_co2 <- flux_calc(pftc7_flags_exp_co2,
                                     "plot_id", "day_night", "flux_type",
                                     "replicate"
                                   ))
-
 ```
 
 ### Linear model
 
-```{r}
-#| label: fitting_lin_co2
-#| message: FALSE
-#| warning: FALSE
+``` r
 pftc7_fits_lin_co2 <- flux_fitting(pftc7_data,
                                    f_conc = `CO2 (umol/mol)_dry`,
                                    fit_type = "linear",
@@ -209,8 +188,8 @@ pftc7_fits_lin_co2 <- flux_fitting(pftc7_data,
 ```
 
 Using `fluxible::flux_quality` to assess the quality of the dataset.
-```{r}
-#| label: flags_lin_co2
+
+``` r
 pftc7_flags_lin_co2 <- flux_quality(pftc7_fits_lin_co2,
                                     f_conc = `CO2 (umol/mol)_dry`,
                                     rsquared_threshold = 0.5,
@@ -224,12 +203,22 @@ pftc7_flags_lin_co2 <- flux_quality(pftc7_fits_lin_co2,
                                       "1_2000_east_1_night_resp−2023−12−11T220436.txt" # not sure why it was discarded
                                     )
                                     )
+#> 
+#>  Total number of measurements: 258
+#> 
+#>  ok   151     59 %
+#>  zero     85      33 %
+#>  discard      19      7 %
+#>  force_discard    3   1 %
+#>  start_error      0   0 %
+#>  no_data      0   0 %
+#>  force_ok     0   0 %
+#>  force_zero   0   0 %
+#>  force_lm     0   0 %
+#>  no_slope     0   0 %
 ```
 
-```{r}
-#| label: plotting_lin_co2
-#| eval: FALSE
-
+``` r
 pftc7_flags_lin_co2 |>
   flux_plot(f_conc = `CO2 (umol/mol)_dry`,
             print_plot = FALSE,
@@ -238,15 +227,11 @@ pftc7_flags_lin_co2 |>
             f_ylim_lower = 350,
             y_text_position = 430,
             f_plotname = "pftc7_lin_co2")
-
 ```
 
+Now let’s calculate the fluxes with `fluxible::flux_calc`.
 
-Now let's calculate the fluxes with `fluxible::flux_calc`.
-```{r}
-#| label: calc_lin_co2
-#| message: FALSE
-
+``` r
 pftc7_fluxes_lin_co2 <- flux_calc(pftc7_flags_lin_co2,
                                   slope_col = f_slope_corr,
                                   temp_air_col = `Temperature (C)`,
@@ -261,24 +246,21 @@ pftc7_fluxes_lin_co2 <- flux_calc(pftc7_flags_lin_co2,
                                     "plot_id", "day_night", "flux_type",
                                     "replicate"
                                   ))
-
 ```
 
-## H~2~O
+## H<sub>2</sub>O
 
 Wet air correction:
-```{r}
-#| label: wetair_h2o
+
+``` r
 pftc7_data <- flux_drygas(pftc7_data, `H2O (mmol/mol)`, `H2O (mmol/mol)`)
 ```
 
 ### Exponential model
 
-Fitting the model presented in @zhaoCalculationDaytimeCO22018 .
-```{r}
-#| label: fitting_exp_h2o
-#| message: FALSE
-#| warning: FALSE
+Fitting the model presented in Zhao et al. (2018) .
+
+``` r
 pftc7_fits_exp_h2o <- flux_fitting(pftc7_data,
                                    f_conc = `H2O (mmol/mol)`,
                                    fit_type = "exp_zhao18",
@@ -288,19 +270,29 @@ pftc7_fits_exp_h2o <- flux_fitting(pftc7_data,
 ```
 
 Using `fluxible::flux_quality` to assess the quality of the dataset.
-```{r}
-#| label: flags_exp_h2o
+
+``` r
 pftc7_flags_exp_h2o <- flux_quality(pftc7_fits_exp_h2o,
                                     f_conc = `H2O (mmol/mol)`,
                                     rsquared_threshold = 0.5,
                                     ambient_conc = 20,
                                     error = 10)
+#> 
+#>  Total number of measurements: 258
+#> 
+#>  ok   237     92 %
+#>  zero     16      6 %
+#>  start_error      3   1 %
+#>  discard      2   1 %
+#>  force_discard    0   0 %
+#>  no_data      0   0 %
+#>  force_ok     0   0 %
+#>  force_zero   0   0 %
+#>  force_lm     0   0 %
+#>  no_slope     0   0 %
 ```
 
-```{r}
-#| label: plotting_exp_h2o
-#| eval: FALSE
-
+``` r
 pftc7_flags_exp_h2o |>
   flux_plot(f_conc = `H2O (mmol/mol)`,
             print_plot = FALSE,
@@ -309,14 +301,11 @@ pftc7_flags_exp_h2o |>
             f_ylim_lower = 0,
             y_text_position = 15,
             f_plotname = "pftc7_exp_h2o")
-
 ```
 
-Now let's calculate the fluxes with `fluxible::flux_calc`.
-```{r}
-#| label: calc_exp_h2o
-#| message: FALSE
+Now let’s calculate the fluxes with `fluxible::flux_calc`.
 
+``` r
 pftc7_fluxes_exp_h2o <- flux_calc(pftc7_flags_exp_h2o,
                                   slope_col = f_slope_corr,
                                   temp_air_col = `Temperature (C)`,
@@ -331,15 +320,11 @@ pftc7_fluxes_exp_h2o <- flux_calc(pftc7_flags_exp_h2o,
                                     "plot_id", "day_night", "flux_type",
                                     "replicate"
                                   ))
-
 ```
 
 ### Linear model
 
-```{r}
-#| label: fitting_lin_h2o
-#| message: FALSE
-#| warning: FALSE
+``` r
 pftc7_fits_lin_h2o <- flux_fitting(pftc7_data,
                                    f_conc = `H2O (mmol/mol)`,
                                    fit_type = "linear",
@@ -349,8 +334,8 @@ pftc7_fits_lin_h2o <- flux_fitting(pftc7_data,
 ```
 
 Using `fluxible::flux_quality` to assess the quality of the dataset.
-```{r}
-#| label: flags_lin_h2o
+
+``` r
 pftc7_flags_lin_h2o <- flux_quality(pftc7_fits_lin_h2o,
                                     f_conc = `H2O (mmol/mol)`,
                                     rsquared_threshold = 0.5,
@@ -359,12 +344,22 @@ pftc7_flags_lin_h2o <- flux_quality(pftc7_fits_lin_h2o,
                                     force_discard = c(
                                       "1_2000_east_1_day_photo−2023−12−14T105344.txt" # clearly not zero
                                     ))
+#> 
+#>  Total number of measurements: 258
+#> 
+#>  ok   169     66 %
+#>  zero     83      32 %
+#>  discard      3   1 %
+#>  start_error      3   1 %
+#>  force_discard    0   0 %
+#>  no_data      0   0 %
+#>  force_ok     0   0 %
+#>  force_zero   0   0 %
+#>  force_lm     0   0 %
+#>  no_slope     0   0 %
 ```
 
-```{r}
-#| label: plotting_lin_h2o
-#| eval: FALSE
-
+``` r
 pftc7_flags_lin_h2o |>
   flux_plot(f_conc = `H2O (mmol/mol)`,
             print_plot = FALSE,
@@ -373,15 +368,11 @@ pftc7_flags_lin_h2o |>
             f_ylim_lower = 0,
             y_text_position = 15,
             f_plotname = "pftc7_lin_h2o")
-
 ```
 
+Now let’s calculate the fluxes with `fluxible::flux_calc`.
 
-Now let's calculate the fluxes with `fluxible::flux_calc`.
-```{r}
-#| label: calc_lin_h2o
-#| message: FALSE
-
+``` r
 pftc7_fluxes_lin_h2o <- flux_calc(pftc7_flags_lin_h2o,
                                   slope_col = f_slope_corr,
                                   temp_air_col = `Temperature (C)`,
@@ -396,17 +387,13 @@ pftc7_fluxes_lin_h2o <- flux_calc(pftc7_flags_lin_h2o,
                                     "plot_id", "day_night", "flux_type",
                                     "replicate"
                                   ))
-
 ```
 
 # Comparison
 
-
 Adjusting to PFTC7 naming convention
-```{r}
-#| label: fluxible-format_co2
-#| message: FALSE
 
+``` r
 pftc7_fluxible_fluxes_co2 <- pftc7_fluxes_exp_co2 |>
   bind_rows(pftc7_fluxes_lin_co2) |>
   mutate(
@@ -438,10 +425,8 @@ pftc7_fluxible_fluxes <- bind_rows(pftc7_fluxible_fluxes_co2, pftc7_fluxible_flu
 ```
 
 Downloading and adjusting published data
-```{r}
-#| label: pftc7-fluxes_co2
-#| message: FALSE
 
+``` r
 get_file("hk2cy",
          "x_ecosystem_fluxes",
          "x_PFTC7_clean_ecosystem_fluxes_2023.csv",
@@ -451,57 +436,39 @@ pftc7_published_fluxes <- read_csv("pftc7_raw_data/x_PFTC7_clean_ecosystem_fluxe
 
 pftc7_published_fluxes <- pftc7_published_fluxes |>
   filter(device == "LI-7500")
-
 ```
 
 Gathering the data
-```{r}
-#| label: gathering-co2
-#| message: FALSE
 
+``` r
 pfct7_comparison <- pftc7_published_fluxes |>
   left_join(pftc7_fluxible_fluxes, by = join_by(site_id, elevation_m_asl, aspect, plot_id, day_night, flux_type, flux_category)) |>
   drop_na(f_model) # missing file in raw data
-
 ```
 
-```{r}
-#| label: figure_h2o
-#| echo: FALSE
-#| fig-cap: "Comparison of fluxes calculated with fluxible and published PFTC7 data paper."
-#| message: FALSE
-#| warning: FALSE
-#| fig-width: 10
-#| fig-height: 12
-
-pfct7_comparison |>
-  ggplot(aes(f_flux, flux_value, color = f_model)) +
-  theme_bw() +
-  scale_color_manual(values = c(
-        exp_zhao18 = "#0c9f0b",
-        linear = "#bf28bd")
-  ) +
-  geom_point() +
-  stat_poly_line() +
-  stat_correlation(use_label("cor.label", "R2", "n")) +
-  geom_abline(slope = 1, intercept = 0) +
-  facet_wrap(. ~ flux_type, ncol = 2, scales = "free") +
-  labs(
-    title = "Reprocessing of PFTC7 flux data",
-    x = "Fluxes calculated with Fluxible (exp_zhao18 and linear model)",
-    y = "Fluxes as published in the data paper",
-    color = "Fluxible model"
-  )
-  # geom_text(aes(label = f_fluxid), vjust = 1.5)
-
-```
+![Comparison of fluxes calculated with fluxible and published PFTC7 data
+paper.](pftc7_files/figure-commonmark/figure_h2o-1.png)
 
 And we clean after ourselves :)
-```{r}
-#| label: cleaning
-#| eval: true
+
+``` r
 unlink(here("pftc7_raw_data"),
        recursive = TRUE)
 ```
 
 ### References
+
+<div id="refs" class="references csl-bib-body hanging-indent"
+entry-spacing="0" line-spacing="2">
+
+<div id="ref-zhaoCalculationDaytimeCO22018" class="csl-entry">
+
+Zhao, P., Hammerle, A., Zeeman, M., & Wohlfahrt, G. (2018). On the
+calculation of daytime CO2 fluxes measured by automated closed
+transparent chambers. *Agricultural and Forest Meteorology*, *263*,
+267–275. doi:
+[10.1016/j.agrformet.2018.08.022](https://doi.org/10.1016/j.agrformet.2018.08.022)
+
+</div>
+
+</div>
