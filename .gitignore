@@ -49,3 +49,6 @@ po/*~
 
 # RStudio Connect folder
 rsconnect/
+
+pftc7_raw_data
+pftc5_raw_data
