@@ -53,7 +53,10 @@ files_remove <- files |>
   str_remove(".zip") |>
   rep(2) |>
   paste0("pftc7_raw_data/LI7500/", . = _, "/", not_use) |>
-  append("pftc7_raw_data/LI7500/__MACOSX")
+  append(
+    c("pftc7_raw_data/LI7500/__MACOSX",
+      "pftc7_raw_data/LI7500/LI7500_Site 4/4_2600_west_2_night_resp-2023-12-16T200310.txt") # this file is empty and makes import crash
+  )
 
 unlink(here(files_remove), recursive = TRUE)
 ```
@@ -65,9 +68,107 @@ unlink(here(files_remove), recursive = TRUE)
 
 pftc7_raw_data <- import7500("pftc7_raw_data/LI7500", version = "post2023")
 
+```
+
+# Processing
+
+## CO~2~
+
+Wet air correction:
+```{r}
+#| label: wetair_co2
+pftc7_data <- flux_drygas(pftc7_raw_data, `CO2 (umol/mol)`, `H2O (mmol/mol)`)
+```
+
+### Exponential model
+
+Fitting the model presented in @zhaoCalculationDaytimeCO22018 .
+```{r}
+#| label: fitting_exp_co2
+#| message: FALSE
+#| warning: FALSE
+pftc7_fits_exp_co2 <- flux_fitting(pftc7_data,
+                                   f_conc = `CO2 (umol/mol)_dry`,
+                                   fit_type = "exp_zhao18",
+                                   start_cut = 0,
+                                   end_cut = 0)
+```
+
+Using `fluxible::flux_quality` to assess the quality of the dataset.
+```{r}
+#| label: flags_exp_co2
+pftc7_flags_exp_co2 <- flux_quality(pftc7_fits_exp_co2,
+                                    f_conc = `CO2 (umol/mol)_dry`,
+                                    rsquared_threshold = 0.5)
+```
+
+```{r}
+#| label: plotting_exp_co2
+#| eval: FALSE
+
+pftc7_flags_exp_co2 |>
+  flux_plot(f_conc = `CO2 (umol/mol)_dry`,
+            print_plot = FALSE,
+            output = "longpdf",
+            f_ylim_upper = 500,
+            f_ylim_lower = 350,
+            y_text_position = 430,
+            # f_facetid = c("f_fluxid", "filename"),
+            f_plotname = "pftc7_exp_co2")
 
 ```
 
+Now let's calculate the fluxes with `fluxible::flux_calc`.
+```{r}
+#| label: calc_exp_co2
+
+pftc7_fluxes_exp_co2 <- flux_calc(pftc7_flags_exp_co2,
+                                  slope_col = f_slope_corr,
+                                  temp_air_col = `Temperature (C)`,
+                                  setup_volume = 2197,
+                                  atm_pressure = pressure_atm,
+                                  plot_area = 1.44,
+                                  conc_unit = "ppm",
+                                  flux_unit = "umol/m2/s",
+                                  cols_keep = c(
+                                    "Date", "Time", "f_quality_flag"
+                                  ))
+
+```
+
+
+# Comparison
+
+## CO~2~
+
+Adjusting to PFTC7 naming convention
+```{r}
+#| label: fluxible-format_co2
+
+pftc7_fluxible_fluxes_co2 <- pftc7_fluxes_exp_co2 |>
+  mutate(
+  f_fluxid = str_replace_all(f_fluxid, c(" " = "_", "__" = "_")), # name convention...
+  replicate = case_when(
+    str_detect(f_fluxid, "_redo") ~ 2,
+    .default = 1
+  ),
+  f_fluxid = str_remove_all(f_fluxid, "_redo")
+  ) |>
+  separate_wider_delim(f_fluxid, "_", names = c(
+    "site_id",
+    "elevation",
+    "aspect",
+    "plot_id",
+    "day_night",
+    "flux_type"
+    ),
+    too_many = "drop",
+    cols_remove = FALSE
+  ) |>
+  mutate(
+    flux_type = str_extract_all(flux_type, "^([a-zA-Z]+)(?=-)|^([a-zA-Z]+)(?=\\.txt$)|^[a-zA-Z]") # getting rid of the rest
+  )
+```
 
 ```{r}
 #| label: cleaning
