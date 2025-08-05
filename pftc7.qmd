@@ -89,8 +89,14 @@ pftc7_data <- pftc7_raw_data |>
   ) |>
   mutate(
     flux_type = str_extract(flux_type, "^(\\w+)(?=-)|^(\\w+)(?=\\.txt$)|^\\w"), # getting rid of the rest
-    flux_type = str_replace_all(flux_type, "r", "resp")
+    flux_type = str_replace_all(flux_type, "r$", "resp"),
+    site_id = as.double(site_id),
+    elevation_m_asl = as.double(elevation_m_asl),
+    plot_id = as.double(plot_id)
   )
+
+pftc7_data |>
+  distinct(flux_type)
 
 ```
 
@@ -156,7 +162,7 @@ pftc7_fluxes_exp_co2 <- flux_calc(pftc7_flags_exp_co2,
                                   flux_unit = "umol/m2/s",
                                   cols_keep = c(
                                     "Date", "Time", "f_quality_flag",
-                                    "site_id", "elevation", "aspect",
+                                    "site_id", "elevation_m_asl", "aspect",
                                     "plot_id", "day_night", "flux_type",
                                     "replicate"
                                   ))
@@ -222,10 +228,10 @@ pftc7_fluxes_exp_h2o <- flux_calc(pftc7_flags_exp_h2o,
                                   atm_pressure = pressure_atm,
                                   plot_area = 1.44,
                                   conc_unit = "mmol/mol",
-                                  flux_unit = "umol/m2/s",
+                                  flux_unit = "mmol/m2/s",
                                   cols_keep = c(
                                     "Date", "Time", "f_quality_flag",
-                                    "site_id", "elevation", "aspect",
+                                    "site_id", "elevation_m_asl", "aspect",
                                     "plot_id", "day_night", "flux_type",
                                     "replicate"
                                   ))
@@ -245,7 +251,7 @@ pftc7_fluxible_fluxes_co2 <- pftc7_fluxes_exp_co2 |>
     flux_type = case_when(
       flux_type == "resp" & day_night == "day" ~ "resp_day",
       flux_type == "resp" & day_night == "night" ~ "resp_night",
-      flux_type == "photo" ~ "NEE",
+      flux_type == "photo" ~ "nee",
       .default = flux_type
     )
   )
@@ -261,7 +267,10 @@ pftc7_fluxible_fluxes_h2o <- pftc7_fluxes_exp_h2o |>
     )
   )
 
-pftc7_fluxible_fluxes <- bind_rows(pftc7_fluxible_fluxes_co2, pftc7_fluxible_fluxes_h2o)
+# keeping the redo when there is a redo
+pftc7_fluxible_fluxes <- bind_rows(pftc7_fluxible_fluxes_co2, pftc7_fluxible_fluxes_h2o) |>
+  arrange(desc(replicate)) |>
+  distinct(site_id, elevation_m_asl, aspect, plot_id, day_night, flux_type, flux_category, .keep_all = TRUE)
 ```
 
 Downloading and adjusting published data
@@ -273,7 +282,10 @@ get_file("hk2cy",
          "x_PFTC7_clean_ecosystem_fluxes_2023.csv",
          "pftc7_raw_data")
 
-pftc7_published_fluxes_co2 <- read_csv("pftc7_raw_data/x_PFTC7_clean_ecosystem_fluxes_2023.csv")
+pftc7_published_fluxes <- read_csv("pftc7_raw_data/x_PFTC7_clean_ecosystem_fluxes_2023.csv")
+
+pftc7_published_fluxes <- pftc7_published_fluxes |>
+  filter(device == "LI-7500")
 
 ```
 
@@ -281,14 +293,39 @@ Gathering the data
 ```{r}
 #| label: gathering-co2
 
-pfct7_comparison <- pftc7_published_fluxes_co2 |>
-  left_join(pftc7_fluxible_fluxes)
+pfct7_comparison <- pftc7_published_fluxes |>
+  left_join(pftc7_fluxible_fluxes, by = join_by(site_id, elevation_m_asl, aspect, plot_id, day_night, flux_type, flux_category))
+
+```
+
+```{r}
+#| label: figure_h2o
+#| echo: FALSE
+#| fig-cap: "Comparison of fluxes calculated with fluxible and published PFTC7 data paper."
+#| message: FALSE
+#| warning: FALSE
+#| fig-width: 8
+#| fig-height: 8 
+
+pfct7_comparison |>
+  ggplot(aes(f_flux, flux_value)) +
+  theme_bw() +
+  geom_point() +
+  geom_abline(slope = 1, intercept = 0) +
+  geom_smooth(
+    method = "lm"
+  ) +
+  facet_wrap(. ~ flux_type, ncol = 2, scales = "free") +
+  labs(
+    title = "Reprocessing of PFTC7 flux data",
+    x = "Fluxes calculated with Fluxible (exp_zhao18 model)",
+    y = "Fluxes as published in the data paper"
+  ) 
 
 ```
 
 ```{r}
 #| label: cleaning
-#| include: FALSE
 #| eval: false
 unlink(here("pftc7_raw_data"),
        recursive = TRUE)

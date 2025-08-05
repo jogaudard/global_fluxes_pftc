@@ -773,7 +773,6 @@ write_csv(pftc5_fluxible_fluxes, "data/raw_data/fluxible_reprocessed/pftc5_fluxi
 
 ```{r}
 #| label: cleaning
-#| include: FALSE
 library(here)
 unlink(here("pftc5_raw_data"),
        recursive = TRUE)
