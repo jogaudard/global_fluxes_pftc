@@ -68,6 +68,30 @@ unlink(here(files_remove), recursive = TRUE)
 
 pftc7_raw_data <- import7500("pftc7_raw_data/LI7500", version = "post2023")
 
+pftc7_data <- pftc7_raw_data |>
+  mutate(
+  f_fluxid_temp = str_replace_all(f_fluxid, c(" " = "_", "__" = "_")), # name convention...
+  replicate = case_when(
+    str_detect(f_fluxid_temp, "_redo") ~ 2,
+    .default = 1
+  ),
+  f_fluxid_temp = str_remove_all(f_fluxid_temp, "_redo")
+  ) |>
+  separate_wider_delim(f_fluxid_temp, "_", names = c(
+    "site_id",
+    "elevation_m_asl",
+    "aspect",
+    "plot_id",
+    "day_night",
+    "flux_type"
+    ),
+    too_many = "drop"
+  ) |>
+  mutate(
+    flux_type = str_extract(flux_type, "^(\\w+)(?=-)|^(\\w+)(?=\\.txt$)|^\\w"), # getting rid of the rest
+    flux_type = str_replace_all(flux_type, "r", "resp")
+  )
+
 ```
 
 # Processing
@@ -77,7 +101,7 @@ pftc7_raw_data <- import7500("pftc7_raw_data/LI7500", version = "post2023")
 Wet air correction:
 ```{r}
 #| label: wetair_co2
-pftc7_data <- flux_drygas(pftc7_raw_data, `CO2 (umol/mol)`, `H2O (mmol/mol)`)
+pftc7_data <- flux_drygas(pftc7_data, `CO2 (umol/mol)`, `H2O (mmol/mol)`)
 ```
 
 ### Exponential model
@@ -131,15 +155,85 @@ pftc7_fluxes_exp_co2 <- flux_calc(pftc7_flags_exp_co2,
                                   conc_unit = "ppm",
                                   flux_unit = "umol/m2/s",
                                   cols_keep = c(
-                                    "Date", "Time", "f_quality_flag"
+                                    "Date", "Time", "f_quality_flag",
+                                    "site_id", "elevation", "aspect",
+                                    "plot_id", "day_night", "flux_type",
+                                    "replicate"
                                   ))
 
 ```
 
+## H~2~O
+
+Wet air correction:
+```{r}
+#| label: wetair_co2
+pftc7_data <- flux_drygas(pftc7_data, `H2O (mmol/mol)`, `H2O (mmol/mol)`)
+```
+
+### Exponential model
+
+Fitting the model presented in @zhaoCalculationDaytimeCO22018 .
+```{r}
+#| label: fitting_exp_h2o
+#| message: FALSE
+#| warning: FALSE
+pftc7_fits_exp_h2o <- flux_fitting(pftc7_data,
+                                   f_conc = `H2O (mmol/mol)`,
+                                   fit_type = "exp_zhao18",
+                                   start_cut = 0,
+                                   end_cut = 0)
+```
+
+Using `fluxible::flux_quality` to assess the quality of the dataset.
+```{r}
+#| label: flags_exp_h2o
+pftc7_flags_exp_h2o <- flux_quality(pftc7_fits_exp_h2o,
+                                    f_conc = `H2O (mmol/mol)`,
+                                    rsquared_threshold = 0.5,
+                                    ambient_conc = 20,
+                                    error = 10)
+```
+
+```{r}
+#| label: plotting_exp_h2o
+#| eval: FALSE
+
+pftc7_flags_exp_h2o |>
+  flux_plot(f_conc = `H2O (mmol/mol)`,
+            print_plot = FALSE,
+            output = "longpdf",
+            f_ylim_upper = 40,
+            f_ylim_lower = 0,
+            y_text_position = 15,
+            # f_facetid = c("f_fluxid", "filename"),
+            f_plotname = "pftc7_exp_h2o")
+
+```
+
+Now let's calculate the fluxes with `fluxible::flux_calc`.
+```{r}
+#| label: calc_exp_h2o
+
+pftc7_fluxes_exp_h2o <- flux_calc(pftc7_flags_exp_h2o,
+                                  slope_col = f_slope_corr,
+                                  temp_air_col = `Temperature (C)`,
+                                  setup_volume = 2197,
+                                  atm_pressure = pressure_atm,
+                                  plot_area = 1.44,
+                                  conc_unit = "mmol/mol",
+                                  flux_unit = "umol/m2/s",
+                                  cols_keep = c(
+                                    "Date", "Time", "f_quality_flag",
+                                    "site_id", "elevation", "aspect",
+                                    "plot_id", "day_night", "flux_type",
+                                    "replicate"
+                                  ))
+
+```
 
 # Comparison
 
-## CO~2~
 
 Adjusting to PFTC7 naming convention
 ```{r}
@@ -147,27 +241,49 @@ Adjusting to PFTC7 naming convention
 
 pftc7_fluxible_fluxes_co2 <- pftc7_fluxes_exp_co2 |>
   mutate(
-  f_fluxid = str_replace_all(f_fluxid, c(" " = "_", "__" = "_")), # name convention...
-  replicate = case_when(
-    str_detect(f_fluxid, "_redo") ~ 2,
-    .default = 1
-  ),
-  f_fluxid = str_remove_all(f_fluxid, "_redo")
-  ) |>
-  separate_wider_delim(f_fluxid, "_", names = c(
-    "site_id",
-    "elevation",
-    "aspect",
-    "plot_id",
-    "day_night",
-    "flux_type"
-    ),
-    too_many = "drop",
-    cols_remove = FALSE
-  ) |>
-  mutate(
-    flux_type = str_extract_all(flux_type, "^([a-zA-Z]+)(?=-)|^([a-zA-Z]+)(?=\\.txt$)|^[a-zA-Z]") # getting rid of the rest
+    flux_category = "Carbon",
+    flux_type = case_when(
+      flux_type == "resp" & day_night == "day" ~ "resp_day",
+      flux_type == "resp" & day_night == "night" ~ "resp_night",
+      flux_type == "photo" ~ "NEE",
+      .default = flux_type
+    )
   )
+
+pftc7_fluxible_fluxes_h2o <- pftc7_fluxes_exp_h2o |>
+  mutate(
+    flux_category = "Water",
+    flux_type = case_when(
+      flux_type == "resp" & day_night == "day" ~ "evap_day",
+      flux_type == "resp" & day_night == "night" ~ "evap_night",
+      flux_type == "photo" ~ "evapotrans",
+      .default = flux_type
+    )
+  )
+
+pftc7_fluxible_fluxes <- bind_rows(pftc7_fluxible_fluxes_co2, pftc7_fluxible_fluxes_h2o)
+```
+
+Downloading and adjusting published data
+```{r}
+#| label: pftc7-fluxes_co2
+
+get_file("hk2cy",
+         "x_ecosystem_fluxes",
+         "x_PFTC7_clean_ecosystem_fluxes_2023.csv",
+         "pftc7_raw_data")
+
+pftc7_published_fluxes_co2 <- read_csv("pftc7_raw_data/x_PFTC7_clean_ecosystem_fluxes_2023.csv")
+
+```
+
+Gathering the data
+```{r}
+#| label: gathering-co2
+
+pfct7_comparison <- pftc7_published_fluxes_co2 |>
+  left_join(pftc7_fluxible_fluxes)
+
 ```
 
 ```{r}
