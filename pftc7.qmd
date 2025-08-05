@@ -21,7 +21,15 @@ options(tidyverse.quiet = TRUE)
 ```{r}
 #| label: osf-import
 #| message: FALSE
-library(dataDownloader)
+my_packages <- c(
+  "dataDownloader",
+  "tidyverse",
+  "licoread",
+  "fluxible",
+  "here"
+)
+
+lapply(my_packages, library, character.only = TRUE)
 
 sites <- c(1:5)
 
@@ -38,15 +46,33 @@ files_zip <- paste0("pftc7_raw_data/", files)
 lapply(files_zip,
        unzip,
        exdir = "pftc7_raw_data/LI7500")
+
+# ok so those files are full of things we don't want...
+not_use <- c("not used", "old")
+files_remove <- files |>
+  str_remove(".zip") |>
+  rep(2) |>
+  paste0("pftc7_raw_data/LI7500/", . = _, "/", not_use) |>
+  append("pftc7_raw_data/LI7500/__MACOSX")
+
+unlink(here(files_remove), recursive = TRUE)
 ```
 
+```{r}
+#| label: reading
+#| message: FALSE
 
+
+pftc7_raw_data <- import7500("pftc7_raw_data/LI7500", version = "post2023")
+
+
+```
 
 
 ```{r}
 #| label: cleaning
 #| include: FALSE
-library(here)
+#| eval: false
 unlink(here("pftc7_raw_data"),
        recursive = TRUE)
 ```
